@@ -1,6 +1,7 @@
 from django import forms
 from rapidsms.models import Connection
 from uganda_common.utils import assign_backend
+import datetime
 
 class YoForm(forms.Form):
     # This is a unique session identifier which will be maintained for the 
@@ -25,6 +26,15 @@ class YoForm(forms.Form):
         identity, backend = assign_backend(self.cleaned_data['msisdn'])
         c, created = Connection.objects.get_or_create(identity=identity, backend=backend)
         self.cleaned_data['msisdn'] = c
+        return self.cleaned_data
+
+    def clean_transactionTime(self):
+        transaction_time = self.cleaned_data['transactionTime']
+        try:
+            self.cleaned_data['transactionTime'] = datetime.datetime.strptime(transaction_time, \
+                                                                              '%Y%m%d(T)%H:%M:%S')
+        except ValueError:
+            raise forms.ValidationError("Invalid transaction time: %s" % transaction_time)
         return self.cleaned_data
 
     def clean(self):
