@@ -7,5 +7,7 @@ class USSDSession(models.Model):
 
 	#TODO figure out how to map transaction_id to progess steps in script.
 	transaction_id = models.CharField(max_length=100):
-
+	
+	def __unicode__(self):
+		return self.mssid
 	
