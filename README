@@ -1,0 +1,4 @@
+RapidSMS-Uganda-USSD
+====================
+USSD for RapidSMS. Work built on top of rapidsms-xforms. Using Xforms, 
+USSD integration can be added.
