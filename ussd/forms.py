@@ -38,3 +38,4 @@ class YoForm(forms.Form):
             pass
 
         return cleaned_data
+
