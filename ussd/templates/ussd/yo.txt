@@ -1,0 +1,1 @@
+responseString={{ response_content }}&action={{ action }}
