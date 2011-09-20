@@ -2,7 +2,7 @@ from django.db import models
 from mptt.models import MPTTModel
 from rapidsms.models import Contact, Connection
 from rapidsms_xforms.models import XForm
-import mptt
+
 
 class USSDSession(models.Model):
     """Model to hold session information"""
@@ -28,8 +28,6 @@ class MenuItem(MPTTModel):
     parent = models.ForeignKey('self', null=True, blank=True, related_name='children')
     label = models.CharField(max_length=50)
     xform = models.ForeignKey(XForm, null=True)
-    #not sure of what type order should be associated to
-    #TODO fk order to something similar to ScriptStep orders
     order = models.IntegerField()
 
 
