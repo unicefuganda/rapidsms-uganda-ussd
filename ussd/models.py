@@ -1,31 +1,38 @@
 from django.db import models
 from rapidsms.models import Contact, Connection
-
+import mptt
 
 class USSDSession(models.Model):
     """Model to hold session information"""
 
     #a unique session identifier which is maintained for an entire USSD session/transaction
-    transactionId  = models.CharField(max_length=100)
-
-    #the time the USSD request came in
-    transactionTime = models.DateTimeField()
+    transaction_id  = models.CharField(max_length=100)
 
     #The telephone number of the subscriber interacting with the USSD code
-    msisdn = models.ForeignKey(Connection)
+	# match this with 'msisdn'
+    connection = models.ForeignKey(Connection)
 
     #The number that the subscriber dialed.
     # for example: *100#, 100 is the service code
-    ussdServiceCode = models.CharField(max_length=4)
+    ussd_service_code = models.CharField(max_length=4)
 
     #The information that the subscriber inputs to the system.
-    ussdRequestString = models.CharField(max_length=100)
+    ussd_request_string = models.CharField(max_length=100)
+	
+	#create XForm models and preferably fk to that.
+	xform_step = models.IntegerField()
 
-    # This indicates whether the incoming request is a a response to
-    # a previously open request. Two values are possible: true/false
-    #TODO data type for response is a little vague; booleans would do well here, need to confirm.
-    response  = models.IntegerField()
+class MenuItem(models.Model):
+	parent = models.ForeignKey('self',null=True,blank=True,related_name='children')
+	label = models.CharField(max_length=50)
+	#xform_
+	#not sure of what type order should be associated to
+	#TODO fk order to something similar to ScriptStep orders
+	order = models.IntegerField()
 
-    def __unicode__(self):
-        #for now, we return msisdn for str() of USSDSession objects
-        return self.msisdn
+
+# register with mptt
+# when properly implemented, calls to 
+# menu Item placeholders is made heirarchical by order
+mptt.register(MenuItem,order_insertion_by=['order'])	
+	
