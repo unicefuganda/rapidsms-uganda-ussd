@@ -12,10 +12,6 @@ class USSDSession(models.Model):
 	# match this with 'msisdn'
     connection = models.ForeignKey(Connection)
 
-    #The number that the subscriber dialed.
-    # for example: *100#, 100 is the service code
-    ussd_service_code = models.CharField(max_length=4)
-
     #The information that the subscriber inputs to the system.
     ussd_request_string = models.CharField(max_length=100)
 	
