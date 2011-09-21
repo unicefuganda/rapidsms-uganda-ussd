@@ -2,7 +2,10 @@ from django.test import TestCase
 from django.test.client import Client
 from django.core.urlresolvers import reverse
 from django.conf import settings
+from .models import MenuItem, USSDSession
 import urllib
+from rapidsms_xforms.models import XForm
+from ussd.models import USSDSession, MenuItem
 
 class BasicTest(TestCase):
 
@@ -28,8 +31,14 @@ class BasicTest(TestCase):
         print "reponse is %s" % response.content
         self.assertEqual('responseString=%s&action=end' % urllib.quote('Your session has ended. Thank you.'), response.content)
 
-#class ViewTest(TestCase): #pragma: no cover
-#
-#    def setUp(self):
-
-
+# view tests
+class UssdTestCase(TestCase):
+    def setUp(self):
+        self.menu_items = MenuItem.
+        self.ussd_session = USSDSession.objects.create(transaction_id='1', connection='1234567', \
+                                                       ussd_request_string='hello rapidsms', current)
+        #self.client = Client()
+        c = Client()
+        #s = self.client.session
+        response = c.post('ussd/')
+        self.assertEqual(response.status_code, 302)
