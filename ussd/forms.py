@@ -1,4 +1,4 @@
-from .models import USSDSession
+from .models import USSDSession, MenuItem
 from django import forms
 from rapidsms.models import Connection
 from uganda_common.utils import assign_backend
@@ -43,10 +43,14 @@ class YoForm(forms.Form):
         transaction_id = cleaned_data.get('transactionId')
         try:
             session = USSDSession.objects.get(transaction_id=transaction_id)
-            self.cleaned_data['transactionId'] = session
+            cleaned_data['transactionId'] = session
         except USSDSession.DoesNotExist:
-            session = USSDSession.objects.create(transaction_id=transaction_id, connection=self.cleaned_data.get('msisdn'))
-            self.cleaned_data['transactionId'] = session
+            try:
+                session = USSDSession.objects.create(transaction_id=transaction_id, \
+                                                     connection=self.cleaned_data.get('msisdn'), \
+                                                     current_menu_item=MenuItem.tree.root_nodes()[0])
+                cleaned_data['transactionId'] = session
+            except IndexError:
+                raise forms.ValidationError("No Root Menu Items exist!")
 
         return cleaned_data
-
