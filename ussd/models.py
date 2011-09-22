@@ -13,6 +13,8 @@ class MenuItem(MPTTModel):
     xform = models.ForeignKey(XForm, null=True)
     order = models.IntegerField()
 
+    def get_menu_text(self):
+        return "\n".join(["%d: %s" % (i.order, i.label) for i in self.get_children().order_by('order')])
 
 class USSDSession(models.Model):
     """Model to hold session information"""
@@ -32,19 +34,19 @@ class USSDSession(models.Model):
     submission = models.ForeignKey(XFormSubmission, null=True)
 
     #create XForm models and preferably fk to that.
-    xform_step = models.IntegerField()
+    xform_step = models.IntegerField(null=True)
 
     def error_case(self):
         return not (self.current_menu_item or self.current_xform) or \
-            (self.current_menu_item and self.current_menu_item.get_chidren.count() == 0)
+            (self.current_menu_item and self.current_menu_item.get_children().count() == 0)
 
     def get_menu_text(self):
-        return "\n".join(["%d: %s" % (i.order, i.label) for i in self.current_menu_item.get_children().order_by(order)])
+        return self.current_menu_item.get_menu_text()
 
     def advance_menu_progress(self, order):
         try:
             next_menu_item = self.current_menu_item.get_children().get(order=order)
-            if next_menu_item.get_children.count() == 0 and next_menu_item.xform:
+            if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
                 self.current_menu_item = None
                 self.current_xform = next_menu_item.xform
             else:

@@ -1,37 +1,11 @@
 from django.test import TestCase
+from django.test.client import Client
+from django.core.urlresolvers import reverse
+from rapidsms.models import Connection
+from ussd.models import MenuItem
+import urllib
 
-
-
-
-        """
-        self.ussd_session = USSDSession.objects.create(
-           #probably setup by us or the USSD gateway
-           transaction_id='1',
-
-           #reusing existing connection
-           connection="1234567",
-
-           #user will probably make a choice between 1 or n
-           ussd_request_string='1',
-
-           current_menu_item=self.menu_item,
-           #setting xform Node to None
-           current_xform=None,
-           submission = None,
-           xform_step = 1
-               )
-        """
-        """
-        #self.ussd_session = USSDSession.objects.create(transaction_id='1', connection='1234567', \
-        #                                              ussd_request_string='hello rapidsms', current)
-        #self.client = Client()
-        c = Client()
-        #s = self.client.session
-        response = c.post('ussd/')
-        self.assertEqual(response.status_code, 302)
-        """
-
-"""
+class BasicTest(TestCase):
 
     def testNoExplosions(self):
         client = Client()
@@ -40,11 +14,55 @@ from django.test import TestCase
         print "url is %s" % url
         response = client.get(reverse('ussd.views.ussd'), {\
             'transactionId':'foo', \
-            #'transactionTime':'20110101(T)01:01:01',
-            'msisdn':Connection.objects.create(backend=self.backend,identity="1",contact=self.contact),
+            'transactionTime':'20110101(T)01:01:01',
+            'msisdn':'8675309',
             'ussdServiceCode':'300',
             'ussdRequestString':'',
         })
-        print "reponse is %s" % response.content
-        self.assertEqual('responseString=%s&action=end' % urllib.quote('Your session has ended. Thank you.'), response.content)
-"""
+        self.assertEquals(response.status_code, 404)
+
+class MenuInteractionTests(TestCase):
+
+    def __create_menu_recurse__(self, parent, menulist):
+        order = 1
+        for label, submenu in menulist:
+            menu_item = MenuItem.objects.create(order=order, label=label, parent=parent, xform=None)
+            self.__create_menu_recurse__(menu_item, submenu)
+            order += 1
+
+    def __create_menu__(self, menulist):
+        self.root_menu = MenuItem.objects.create(order=0, label='root', parent=None, xform=None)
+        self.__create_menu_recurse__(self.root_menu, menulist)
+        self.root_menu = MenuItem.objects.get(pk=self.root_menu.pk)
+
+    def setUp(self):
+        self.client = Client()
+        self.url = reverse('ussd.views.ussd')
+        self.__create_menu__(\
+            [('Fruits', []),
+             ('Vegetables', [('Pointless Rabit Food', [('Carrots', [])])]),
+             ('MEAT', [
+                 ('Bacon', []),
+                 ('Chicken', [('Spicy', []), ('Fried', []), ('Cajun', [])]),
+                 ('Turducken', [])
+             ])]
+        )
+
+    def testDepth(self):
+        menu_items = MenuItem.objects.all()
+        response = self.client.get(self.url, {\
+            'transactionId':'foo', \
+            'transactionTime':'20110101(T)01:01:01',
+            'msisdn':'8675309',
+            'ussdServiceCode':'300',
+            'ussdRequestString':'',
+        })
+        self.assertEquals(response.content, 'responseString=%s&action=request' % urllib.quote(self.root_menu.get_menu_text()))
+        response = self.client.get(self.url, {\
+            'transactionId':'foo', \
+            'transactionTime':'20110101(T)01:01:01',
+            'msisdn':'8675309',
+            'ussdServiceCode':'300',
+            'ussdRequestString':'1',
+        })
+        self.assertEquals(response.content, 'responseString=%s&action=request' % urllib.quote(self.root_menu.get_children().get(order=1).get_menu_text()))

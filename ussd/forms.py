@@ -18,37 +18,40 @@ class YoForm(forms.Form):
     # 150 is the service code, the max length is 4
     ussdServiceCode = forms.CharField()
     # This is information which was input by the subscriber.
-    ussdRequestString = forms.CharField()
+    ussdRequestString = forms.CharField(required=False)
     # This indicates whether the incoming request is a response to a previously open request. 
     # Takes two possible string values namely "true" or "false".
-    response = forms.CharField()
+    response = forms.CharField(required=False)
 
     def clean_msisdn(self):
-        identity, backend = assign_backend(self.cleaned_data['msisdn'])
+        cleaned_data = self.cleaned_data
+        identity, backend = assign_backend(cleaned_data['msisdn'])
         c, created = Connection.objects.get_or_create(identity=identity, backend=backend)
-        self.cleaned_data['msisdn'] = c
-        return self.cleaned_data
+        return c
 
     def clean_transactionTime(self):
-        transaction_time = self.cleaned_data['transactionTime']
+        cleaned_data = self.cleaned_data
+        transaction_time = cleaned_data['transactionTime']
         try:
-            self.cleaned_data['transactionTime'] = datetime.datetime.strptime(transaction_time, \
+            cleaned_data['transactionTime'] = datetime.datetime.strptime(transaction_time, \
                                                                               '%Y%m%d(T)%H:%M:%S')
         except ValueError:
             raise forms.ValidationError("Invalid transaction time: %s" % transaction_time)
-        return self.cleaned_data
+        return cleaned_data['transactionTime']
 
     def clean(self):
         cleaned_data = self.cleaned_data
         transaction_id = cleaned_data.get('transactionId')
+
         try:
             session = USSDSession.objects.get(transaction_id=transaction_id)
             cleaned_data['transactionId'] = session
         except USSDSession.DoesNotExist:
             try:
+                root_item = MenuItem.tree.root_nodes()[0]
                 session = USSDSession.objects.create(transaction_id=transaction_id, \
-                                                     connection=self.cleaned_data.get('msisdn'), \
-                                                     current_menu_item=MenuItem.tree.root_nodes()[0])
+                                                     connection=cleaned_data.get('msisdn'), \
+                                                     current_menu_item=root_item)
                 cleaned_data['transactionId'] = session
             except IndexError:
                 raise forms.ValidationError("No Root Menu Items exist!")
