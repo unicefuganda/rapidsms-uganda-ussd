@@ -29,13 +29,13 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
             if session.error_case():
                 response_content = 'Your session has ended. Thank you.'
                 action = 'end'
+
             else:
                 response_content += session.get_menu_text()
                 action = 'request'
 
         elif session.current_xform:
             response_content, action = session.process_xform_response(request_string)
-
 
         return render_to_response(output_template, {
             'response_content':urllib.quote(response_content),

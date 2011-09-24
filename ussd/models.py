@@ -3,7 +3,7 @@ from django.forms import ValidationError
 from mptt.models import MPTTModel
 from rapidsms.models import Contact, Connection
 
-from rapidsms_xforms.models import XForm, XFormSubmission
+from rapidsms_xforms.models import XForm, XFormSubmission, xform_received
 import mptt
 
 
@@ -41,7 +41,12 @@ class USSDSession(models.Model):
             (self.current_menu_item and self.current_menu_item.get_children().count() == 0)
 
     def get_menu_text(self):
-        return self.current_menu_item.get_menu_text()
+        if self.error_case():
+            raise ValueError("Invalid Action!")
+        if self.current_menu_item:
+            return self.current_menu_item.get_menu_text()
+        elif self.current_xform:
+            return self.current_xform.fields.get(order=self.xform_step).question
 
     def advance_menu_progress(self, order):
         try:
@@ -49,11 +54,14 @@ class USSDSession(models.Model):
             if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
                 self.current_menu_item = None
                 self.current_xform = next_menu_item.xform
+                self.xform_step = self.current_xform.fields.order_by('order')[0].order
+                self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
+                                                                    has_errors=True)
             else:
                 self.current_menu_item = next_menu_item
             self.save()
         except MenuItem.DoesNotExist:
-            pass
+            raise ValueError("Invalid menu option %d" % order)
 
     def process_xform_response(self, request_string):
         response_content = ''
@@ -61,18 +69,19 @@ class USSDSession(models.Model):
             if request_string and self.current_xform.fields.filter(order=self.xform_step).count():
                 try:
                     field = self.current_xform.fields.get(order=self.xform_step)
-                    val = field.clean_submission(request_string)
+                    val = field.clean_submission(request_string, 'ussd')
                     self.submission.values.create(attribute=field, value=val, entity=self.submission)
                     self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
                     self.save()
                 except ValidationError, e:
                     response_content += "\n".join(e.messages)
+                except IndexError:
+                    self.submission.has_errors = False
+                    self.submission.response = self.current_xform.response
+                    xform_received.send(sender=self.current_xform, xform=self.current_xform, submission=self.submission)
+                    self.submission.save()
+                    return self.submission.response, 'end'
 
-            else:
-                # create new submission object
-                self.xform_step = self.current_xform.fields.order_by('order')[0].order
-                self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
-                                                                    has_errors=True)
             response_content += self.current_xform.fields.get(order=self.xform_step).question
             action = 'request'
         except IndexError:
