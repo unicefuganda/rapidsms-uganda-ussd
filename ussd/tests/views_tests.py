@@ -69,6 +69,7 @@ class MenuInteractionTests(TestCase):
                  ('Turducken', [])
              ])]
         )
+        self.back = '#'
 
     def testDepth(self):
         self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
@@ -81,6 +82,22 @@ class MenuInteractionTests(TestCase):
         self.assertSessionNavigation('bar', '3', self.getMenuItem([3]).get_menu_text())
         self.assertSessionNavigation('bar', '2', self.getMenuItem([3, 2]).get_menu_text())
         self.assertSessionNavigation('bar', '2', 'Your session has ended. Thank you.', action='end')
+
+    def testBackwardsForwards(self):
+        hash = self.back
+        self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
+        self.assertSessionNavigation('foo', '2', self.getMenuItem([2]).get_menu_text())
+        self.assertSessionNavigation('foo', '1', self.getMenuItem([2, 1]).get_menu_text())
+        self.assertSessionNavigation('foo', hash, self.getMenuItem([2]).get_menu_text())
+        self.assertSessionNavigation('foo', hash, self.root_menu.get_menu_text())
+
+        self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
+        self.assertSessionNavigation('foo', '3', self.getMenuItem([3]).get_menu_text())
+        self.assertSessionNavigation('foo', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('foo', hash, self.getMenuItem([3]).get_menu_text())
+        self.assertSessionNavigation('foo', hash, self.root_menu.get_menu_text())
+        # Don't allow backwards navigation from the root
+        self.assertSessionNavigation('foo', hash, "Invalid Menu Option.\n%s" % self.root_menu.get_menu_text())
 
     def testBadMenuSelect(self):
         self.assertSessionNavigation('whoa', '', self.root_menu.get_menu_text())
@@ -105,5 +122,32 @@ class MenuInteractionTests(TestCase):
         self.assertEquals(XFormSubmission.objects.count(), 1)
         submission = XFormSubmission.objects.all()[0]
         self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 27)
+        self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 270)
+        self.failIf(submission.has_errors)
+
+    def testBadXFormSubmission(self):
+        xform = XForm.objects.create(keyword='test', name='test xform', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
+        xform.fields.create(xform=xform, name='t1', field_type=XFormField.TYPE_INT, command='test_t1', question='How old are you?', order=0)
+        xform.fields.create(xform=xform, name='t2', field_type=XFormField.TYPE_INT, command='test_t2', question='How many tests have you run?', order=1)
+        mi = self.getMenuItem([3, 2, 2])
+        mi.xform = xform
+        mi.save()
+
+        self.assertSessionNavigation('whoa', '', self.root_menu.get_menu_text())
+        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % self.root_menu.get_menu_text())
+        self.assertSessionNavigation('whoa', '3', self.getMenuItem([3]).get_menu_text())
+        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % self.getMenuItem([3]).get_menu_text())
+        self.assertSessionNavigation('whoa', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('whoa', '2', 'How old are you?')
+        # bad user says he is "strawberry" years old
+        self.assertSessionNavigation('whoa', 'strawberry', '+test_t1 parameter must be an even number.How old are you?')
+        self.assertSessionNavigation('whoa', '20', 'How many tests have you run?')
+        # bad user types an invalid value "what?", he probably thought this is conversational.
+        self.assertSessionNavigation('whoa', 'what?', '+test_t2 parameter must be an even number.How many tests have you run?')
+        self.assertSessionNavigation('whoa', '270', 'thanks for testing', action='end')
+
+        self.assertEquals(XFormSubmission.objects.count(), 1)
+        submission = XFormSubmission.objects.all()[0]
+        self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 20)
         self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 270)
         self.failIf(submission.has_errors)
