@@ -77,6 +77,7 @@ class MenuInteractionTests(TestCase):
         self.assertSessionNavigation('foo', '1', self.getMenuItem([2, 1]).get_menu_text())
         self.assertSessionNavigation('foo', '1', 'Your session has ended. Thank you.', action='end')
 
+
     def testBreadth(self):
         self.assertSessionNavigation('bar', '', self.root_menu.get_menu_text())
         self.assertSessionNavigation('bar', '3', self.getMenuItem([3]).get_menu_text())
@@ -141,6 +142,7 @@ class MenuInteractionTests(TestCase):
         self.assertSessionNavigation('whoa', '2', 'How old are you?')
         # bad user says he is "strawberry" years old
         self.assertSessionNavigation('whoa', 'strawberry', '+test_t1 parameter must be an even number.How old are you?')
+
         self.assertSessionNavigation('whoa', '20', 'How many tests have you run?')
         # bad user types an invalid value "what?", he probably thought this is conversational.
         self.assertSessionNavigation('whoa', 'what?', '+test_t2 parameter must be an even number.How many tests have you run?')
