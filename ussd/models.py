@@ -63,17 +63,18 @@ class USSDSession(models.Model):
         except MenuItem.DoesNotExist:
             raise ValueError("Invalid menu option %d" % order)
     # work needed on function
-    def back(self,current_order):
+    def back(self,order):
         try:
-            previous_menu_item = self.current_menu_item.get_ancestors(ascending=True).get(order=current_order)
-            if previous_menu_item.get_ancestors().count() == 0 and previous_menu_item.xform:
-                self.previous_menu_item = None
+            # if current menu item has ancestors
+            if self.current_menu_item.get_ancestors():
+                previous_menu_item = self.current_menu_item.get_ancestors(ascending=True).get(order=order-1)
+                self.current_menu_item = None
                 self.previous_xform = previous_menu_item.xform
-                self.xform_step = self.previous_xform.fields.order_by('order')[0].order #should we substract 1?
+                self.xform_step = self.previous_xform.fields.order_by('order')[0].order
                 self.submission = XFormSubmission.objects.create(xform=self.previous_xform,has_errors=True)
             else:
                 self.previous_menu_item = previous_menu_item
-                self.save()
+            self.save()
         except MenuItem.DoesNotExist:
             raise ValueError("Invalid menu options %d"%order)
 
