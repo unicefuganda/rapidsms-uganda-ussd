@@ -48,37 +48,32 @@ class USSDSession(models.Model):
         elif self.current_xform:
             return self.current_xform.fields.get(order=self.xform_step).question
 
+
+
+    def back(self):
+        # order is what step the user has to go to
+        # self.back is the step the user has to go back
+        previous_menu_item = self.current_menu_item.get_ancestors(ascending=True)[0]
+        self.current_menu_item = previous_menu_item
+
     def advance_menu_progress(self, order):
         try:
-            next_menu_item = self.current_menu_item.get_children().get(order=order)
-            if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
-                self.current_menu_item = None
-                self.current_xform = next_menu_item.xform
-                self.xform_step = self.current_xform.fields.order_by('order')[0].order
-                self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
-                                                                    has_errors=True)
-            else:
-                self.current_menu_item = next_menu_item
+            if int(order) or order=='#':
+                if int(order):
+                    next_menu_item = self.current_menu_item.get_children().get(order=order)
+                    if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
+                        self.current_menu_item = None
+                        self.current_xform = next_menu_item.xform
+                        self.xform_step = self.current_xform.fields.order_by('order')[0].order
+                        self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
+                                                                        has_errors=True)
+                    else:
+                        self.current_menu_item = next_menu_item
+                elif order == "#":
+                    self.back()
             self.save()
         except MenuItem.DoesNotExist:
-            raise ValueError("Invalid menu option %d" % order)
-    # work needed on function
-
-    def back(self,order):
-        try:
-            # if current menu item has ancestors
-            previous_menu_item = self.current_menu_item.get_ancestors(ascending=True).get(order=order)
-            if previous_menu_item.get_ancestors(ascending=True).count() == 0 and previous_menu_item.xform:
-                self.previous_menu_item = None
-                self.current_xform = previous_menu_item.xform
-                self.xform_step = self.current_xform.fields.order_by('order')[0].order
-                self.submission = XFormSubmission.objects.create(xform=self.current_xform,has_errors=True)
-
-            else:
-                self.current_xform = previous_menu_item
-            self.save()
-        except MenuItem.DoesNotExist:
-            raise ValueError("Invalid menu option %d"%order)
+            raise ValueError("Invalid Menu Option. %r" % order)
 
 
     def process_xform_response(self, request_string):
