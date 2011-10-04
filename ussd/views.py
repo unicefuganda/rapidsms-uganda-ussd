@@ -62,7 +62,7 @@ def __render_screen_from_session__(ussdsession):
         # This is a regular data collection step, just ask the appropriate question
         return (__render_data_input__(ussdsession), 'request',)
 
-def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.txt'):
+def ussd(req, input_form=YoForm, request_method='POST', output_template='ussd/yo.txt'):
     form = None
     if request_method == 'GET' and req.GET:
         form = input_form(req.GET)
