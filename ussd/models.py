@@ -72,19 +72,16 @@ class USSDSession(models.Model):
 
     def advance_menu_progress(self, order):
         try:
-            if int(order) or order == '#':
-                if int(order):
-                    next_menu_item = self.current_menu_item.get_children().get(order=order)
-                    if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
-                        self.current_menu_item = None
-                        self.current_xform = next_menu_item.xform
-                        self.xform_step = self.current_xform.fields.order_by('order')[0].order
-                        self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
+            if int(order):
+                next_menu_item = self.current_menu_item.get_children().get(order=order)
+                if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
+                    self.current_menu_item = None
+                    self.current_xform = next_menu_item.xform
+                    self.xform_step = self.current_xform.fields.order_by('order')[0].order
+                    self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
                                                                         has_errors=True)
-                    else:
-                        self.current_menu_item = next_menu_item
-                elif order == "#":
-                    self.back()
+                else:
+                    self.current_menu_item = next_menu_item
             self.save()
         except MenuItem.DoesNotExist:
             raise ValueError("Invalid Menu Option. %r" % order)
