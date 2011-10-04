@@ -16,7 +16,7 @@ class MenuItem(MPTTModel):
 
     # an XForm, for "leaf" menu items that drop the user straight into a question-and-answer
     # session for collecting a form
-    xform = models.ForeignKey(XForm, null=True)
+    xform = models.ForeignKey(XForm, null=True, blank=True)
 
     # The order this menu item should be displayed from it's parent menu
     order = models.IntegerField()
@@ -53,6 +53,9 @@ class MenuItem(MPTTModel):
             return self.get_children().order_by('order')[num - 1].order
         except IndexError:
             raise ValueError("menu out of valid range")
+
+    def __unicode__(self):
+        return "%d: %s" % (self.order, self.label)
 
 
 class USSDSession(models.Model):
