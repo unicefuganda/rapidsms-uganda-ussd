@@ -142,9 +142,15 @@ class USSDSession(models.Model):
                 try:
                     field = self.current_xform.fields.get(order=self.xform_step)
                     val = field.clean_submission(request_string, 'ussd')
+                    if self.current_menu_item.skip_option:
+                        self.is_skip_prompt = True
                     self.submission.values.create(attribute=field, value=val, entity=self.submission)
                     self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
                     self.save()
+                    # if submission complete, return True
+                    if self.submission:
+                        return True
+                    return False
                 except ValidationError, e:
                     response_content += "\n".join(e.messages)
                 except IndexError:
