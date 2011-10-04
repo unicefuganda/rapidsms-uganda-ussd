@@ -19,7 +19,7 @@ class BasicTest(TestCase):
         print "url is %s" % url
         response = client.get(reverse('ussd.views.ussd'), {\
             'transactionId':'foo', \
-            'transactionTime':'20110101(T)01:01:01',
+            'transactionTime':'20110101T01:01:01',
             'msisdn':'8675309',
             'ussdServiceCode':'300',
             'ussdRequestString':'',
@@ -43,7 +43,7 @@ class MenuInteractionTests(TestCase):
     def assertSessionNavigation(self, transaction_id, request, expected_response, action='request'):
         response = ussd(self.factory.get(self.url, {\
             'transactionId':transaction_id, \
-            'transactionTime':datetime.datetime.now().strftime('%Y%m%d(T)%H:%M:%S'),
+            'transactionTime':datetime.datetime.now().strftime('%Y%m%dT%H:%M:%S'),
             'msisdn':'8675309',
             'ussdServiceCode':'300',
             'ussdRequestString':request,

@@ -34,7 +34,7 @@ class YoForm(forms.Form):
         transaction_time = cleaned_data['transactionTime']
         try:
             cleaned_data['transactionTime'] = datetime.datetime.strptime(transaction_time, \
-                                                                              '%Y%m%d(T)%H:%M:%S')
+                                                                              '%Y%m%dT%H:%M:%S')
         except ValueError:
             raise forms.ValidationError("Invalid transaction time: %s" % transaction_time)
         return cleaned_data['transactionTime']
