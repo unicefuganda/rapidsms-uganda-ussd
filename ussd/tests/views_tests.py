@@ -41,7 +41,7 @@ class MenuInteractionTests(TestCase):
         self.root_menu = MenuItem.objects.get(pk=self.root_menu.pk)
 
     def assertSessionNavigation(self, transaction_id, request, expected_response, action='request'):
-        response = ussd(self.factory.get(self.url, {\
+        response = ussd(self.factory.post(self.url, {\
             'transactionId':transaction_id, \
             'transactionTime':datetime.datetime.now().strftime('%Y%m%dT%H:%M:%S'),
             'msisdn':'8675309',
