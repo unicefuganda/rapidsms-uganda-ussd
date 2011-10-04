@@ -16,7 +16,7 @@ class MenuItem(MPTTModel):
     # Use a context-specific question to ask the user if they wish to enter further optional
     # fields.  An affirmative answer should mean continue, i.e.
     # "do you have more diseases to report?"
-    skip_question = models.CharField(max_length=50,null=True, blank=True)
+    skip_question = models.TextField(null=True, blank=True)
 
     def get_submenu_labels(self):
         '''
