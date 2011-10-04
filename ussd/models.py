@@ -130,20 +130,21 @@ class USSDSession(models.Model):
         '''
         This method processes the current request_string, based on the progress along
         this particular XForm (based on current_xform and xform_step).  If, after processing
-        this step, the session has reached the skip_option question, the session will be update
+        this step, the session has reached the skip_option question, the session will update
         is_skip_prompt to True (TODO).  After processing the current field (and raising any ValidationErrors
         that may occur), this method attempts to advance to the next XFormField in the XForm.
-        
+
         (TODO) Returns True if there are more fields to gather, False if the XFormSubmission is complete.
         '''
         response_content = ''
         try:
             if request_string and self.current_xform.fields.filter(order=self.xform_step).count():
                 try:
-                    field = self.current_xform.fields.get(order=self.xform_step)
-                    val = field.clean_submission(request_string, 'ussd')
                     if self.current_menu_item.skip_option:
                         self.is_skip_prompt = True
+                    field = self.current_xform.fields.get(order=self.xform_step)
+                    val = field.clean_submission(request_string, 'ussd')
+
                     self.submission.values.create(attribute=field, value=val, entity=self.submission)
                     self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
                     self.save()
