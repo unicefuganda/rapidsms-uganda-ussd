@@ -136,34 +136,20 @@ class USSDSession(models.Model):
 
         (TODO) Returns True if there are more fields to gather, False if the XFormSubmission is complete.
         '''
-        response_content = ''
+
         try:
-            if request_string and self.current_xform.fields.filter(order=self.xform_step).count():
-                try:
-                    if self.current_menu_item.skip_option:
-                        self.is_skip_prompt = True
-                    field = self.current_xform.fields.get(order=self.xform_step)
-                    val = field.clean_submission(request_string, 'ussd')
-
-                    self.submission.values.create(attribute=field, value=val, entity=self.submission)
-                    self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
-                    self.save()
-                    # if submission complete, return True
-                    if self.submission:
-                        return True
-                    return False
-                except ValidationError, e:
-                    response_content += "\n".join(e.messages)
-                except IndexError:
-                    self.submission.has_errors = False
-                    self.submission.response = self.current_xform.response
-                    xform_received.send(sender=self.current_xform, xform=self.current_xform, submission=self.submission)
-                    self.submission.save()
-                    return self.submission.response, 'end'
-
-            response_content += self.current_xform.fields.get(order=self.xform_step).question
-            action = 'request'
+            field = self.current_xform.fields.get(order=self.xform_step)
+            val = field.clean_submission(request_string, 'ussd')
+            self.submission.values.create(attribute=field, value=val, entity=self.submission)
+            self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
+            if self.current_menu_item.skip_option == self.xform_step:
+                self.is_skip_prompt = True
+                self.save()
+                # if submission complete, return True
+                return True
         except IndexError:
-            response_content = 'Your session has ended. Thank you.'
-            action = 'end'
-        return response_content, action
+            self.submission.has_errors = False
+            self.submission.response = self.current_xform.response
+            xform_received.send(sender=self.current_xform, xform=self.current_xform, submission=self.submission)
+            self.submission.save()
+            return False
