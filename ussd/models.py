@@ -49,7 +49,7 @@ class USSDSession(models.Model):
     # Is the current screen a prompt to skip the remaining fields in an xform
     is_skip_prompt = models.BooleanField(default=False)
 
-    #create XForm models and preferably fk to that.
+    #the step that the user has reached during questioning e.g. during a poll
     xform_step = models.IntegerField(null=True)
 
     def error_case(self):
