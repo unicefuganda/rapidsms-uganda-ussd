@@ -115,14 +115,12 @@ class USSDSession(models.Model):
         '''
         try:
             order = int(order)
-            next_menu_item = self.current_menu_item.get_children().get(order=order)
-            if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
-                self.current_xform = next_menu_item.xform
+            self.current_menu_item = self.current_menu_item.get_children().get(order=order)
+            if self.current_menu_item.get_children().count() == 0 and self.current_menu_item.xform:
+                self.current_xform = self.current_menu_item.xform
                 self.xform_step = self.current_xform.fields.order_by('order')[0].order
                 self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
                                                                     has_errors=True)
-            else:
-                self.current_menu_item = next_menu_item
             self.save()
         except ValueError:
             raise ValueError("Invalid character")
@@ -145,8 +143,8 @@ class USSDSession(models.Model):
             val = field.clean_submission(request_string, 'ussd')
             self.submission.values.create(attribute=field, value=val, entity=self.submission)
             self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
-            if self.current_menu_item.skip_option == self.xform_step:
-                self.is_skip_prompt = True
+            self.is_skip_prompt = (self.current_menu_item.skip_option == self.xform_step)
+
             # if submission isn't complete, return True ('True' => collect more data)
             self.save()
             return True

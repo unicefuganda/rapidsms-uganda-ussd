@@ -96,7 +96,9 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
                         session.is_skip_prompt = False
                         session.save()
                     elif choice == 2:
-                        response_content = "Your session has ended. Thank you."
+                        response_content = session.current_xform.response
+                        session.submission.has_errors = False
+                        session.submission.save()
                         action = 'end'
                     else:
                         response_content = "Invalid Menu Option.\n"
