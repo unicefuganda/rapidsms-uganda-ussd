@@ -20,8 +20,13 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
         if session.current_menu_item:
             if request_string:
                 try:
-                    order = int(request_string)
-                    session.advance_menu_progress(order)
+                    order = request_string
+                    if int(order):
+                        session.advance_menu_progress(order)
+                    elif order == '#':
+                        session.back()
+                    else:
+                        print "no acceptable response" #TODO replace with an exception
                 except ValueError:
                     order = -1
                     response_content += "Invalid Menu Option.\n"
