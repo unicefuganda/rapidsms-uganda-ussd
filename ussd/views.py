@@ -68,7 +68,7 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
     if form and form.is_valid():
         session = form.cleaned_data['transactionId']
         request_string = form.cleaned_data['ussdRequestString']
-        response_content = None
+        response_content = ''
         action = None
         if session.error_case():
             response_content, action = __render_screen_from_session__(session)

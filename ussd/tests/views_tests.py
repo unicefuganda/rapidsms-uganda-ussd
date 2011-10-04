@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
 from rapidsms_xforms.models import XForm, XFormField, XFormSubmission
 from ussd.models import MenuItem
-from ussd.views import ussd
+from ussd.views import ussd, __render_menu__
 import datetime
 import urllib
 
@@ -72,41 +72,41 @@ class MenuInteractionTests(TestCase):
         self.back = '#'
 
     def testDepth(self):
-        self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('foo', '2', self.getMenuItem([2]).get_menu_text())
-        self.assertSessionNavigation('foo', '#', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('foo', '2', self.getMenuItem([2]).get_menu_text())
-        self.assertSessionNavigation('foo', '1', self.getMenuItem([2, 1]).get_menu_text())
+        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([2])))
+        self.assertSessionNavigation('foo', '#', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([2])))
+        self.assertSessionNavigation('foo', '1', __render_menu__(self.getMenuItem([2, 1])))
 
         self.assertSessionNavigation('foo', '1', 'Your session has ended. Thank you.', action='end')
 
 
     def testBreadth(self):
-        self.assertSessionNavigation('bar', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('bar', '3', self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('bar', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('bar', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('bar', '3', __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('bar', '2', __render_menu__(self.getMenuItem([3, 2])))
         self.assertSessionNavigation('bar', '2', 'Your session has ended. Thank you.', action='end')
 
     def testBackwardsForwards(self):
         hash = self.back
-        self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('foo', '2', self.getMenuItem([2]).get_menu_text())
-        self.assertSessionNavigation('foo', '1', self.getMenuItem([2, 1]).get_menu_text())
-        self.assertSessionNavigation('foo', hash, self.getMenuItem([2]).get_menu_text())
-        self.assertSessionNavigation('foo', hash, self.root_menu.get_menu_text())
+        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([2])))
+        self.assertSessionNavigation('foo', '1', __render_menu__(self.getMenuItem([2, 1])))
+        self.assertSessionNavigation('foo', hash, __render_menu__(self.getMenuItem([2])))
+        self.assertSessionNavigation('foo', hash, __render_menu__(self.root_menu))
 
-        self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('foo', '3', self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('foo', '2', self.getMenuItem([3, 2]).get_menu_text())
-        self.assertSessionNavigation('foo', hash, self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('foo', hash, self.root_menu.get_menu_text())
+        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('foo', '3', __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([3, 2])))
+        self.assertSessionNavigation('foo', hash, __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('foo', hash, __render_menu__(self.root_menu))
         # Don't allow backwards navigation from the root
-        self.assertSessionNavigation('foo', hash, "Invalid Menu Option.\n%s" % self.root_menu.get_menu_text())
+        self.assertSessionNavigation('foo', hash, "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
 
     def testBadMenuSelect(self):
-        self.assertSessionNavigation('whoa', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % self.root_menu.get_menu_text())
-        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % self.root_menu.get_menu_text())
+        self.assertSessionNavigation('whoa', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
+        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
 
     def testXFormSubmission(self):
         xform = XForm.objects.create(keyword='test', name='test xform', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
@@ -116,9 +116,9 @@ class MenuInteractionTests(TestCase):
         mi.xform = xform
         mi.save()
 
-        self.assertSessionNavigation('bar', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('bar', '3', self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('bar', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('bar', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('bar', '3', __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('bar', '2', __render_menu__(self.getMenuItem([3, 2])))
         self.assertSessionNavigation('bar', '2', 'How old are you?')
         self.assertSessionNavigation('bar', '27', 'How many tests have you run?')
         self.assertSessionNavigation('bar', '270', 'thanks for testing', action='end')
@@ -139,9 +139,9 @@ class MenuInteractionTests(TestCase):
         mi.skip_question = "Do you want to keep testing?"
         mi.save()
 
-        self.assertSessionNavigation('bar', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('bar', '3', self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('bar', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('bar', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('bar', '3', __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('bar', '2', __render_menu__(self.getMenuItem([3, 2])))
         self.assertSessionNavigation('bar', '2', 'How old are you?')
         self.assertSessionNavigation('bar', '27', 'Do you want to keep testing?\n1. Yes\n2. No')
         self.assertSessionNavigation('bar', '1', 'How many tests have you run?')
@@ -153,9 +153,9 @@ class MenuInteractionTests(TestCase):
         self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 270)
         self.failIf(submission.has_errors)
 
-        self.assertSessionNavigation('foo', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('foo', '3', self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('foo', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('foo', '3', __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([3, 2])))
         self.assertSessionNavigation('foo', '2', 'How old are you?')
         self.assertSessionNavigation('foo', '28', 'Do you want to keep testing?\n1. Yes\n2. No')
         self.assertSessionNavigation('foo', '2', 'thanks for testing', action='end')
@@ -175,11 +175,11 @@ class MenuInteractionTests(TestCase):
         mi.xform = xform
         mi.save()
 
-        self.assertSessionNavigation('whoa', '', self.root_menu.get_menu_text())
-        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % self.root_menu.get_menu_text())
-        self.assertSessionNavigation('whoa', '3', self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % self.getMenuItem([3]).get_menu_text())
-        self.assertSessionNavigation('whoa', '2', self.getMenuItem([3, 2]).get_menu_text())
+        self.assertSessionNavigation('whoa', '', __render_menu__(self.root_menu))
+        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
+        self.assertSessionNavigation('whoa', '3', __render_menu__(self.getMenuItem([3])))
+        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % self.getMenuItem([3]))
+        self.assertSessionNavigation('whoa', '2', __render_menu__(self.getMenuItem([3, 2])))
         self.assertSessionNavigation('whoa', '2', 'How old are you?')
         # bad user says he is "strawberry" years old
         self.assertSessionNavigation('whoa', 'strawberry', '+test_t1 parameter must be an even number.How old are you?')
