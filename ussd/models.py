@@ -49,7 +49,7 @@ class USSDSession(models.Model):
     # Is the current screen a prompt to skip the remaining fields in an xform
     is_skip_prompt = models.BooleanField(default=False)
 
-    #create XForm models and preferably fk to that.
+    #the step that the user has reached during questioning e.g. during a poll
     xform_step = models.IntegerField(null=True)
 
     def error_case(self):
@@ -69,6 +69,7 @@ class USSDSession(models.Model):
         # self.back is the step the user has to go back
         previous_menu_item = self.current_menu_item.parent
         self.current_menu_item = previous_menu_item
+        self.save()
 
     def advance_menu_progress(self, order):
         try:
