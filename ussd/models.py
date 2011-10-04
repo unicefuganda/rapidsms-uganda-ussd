@@ -53,7 +53,7 @@ class USSDSession(models.Model):
     def back(self):
         # order is what step the user has to go to
         # self.back is the step the user has to go back
-        previous_menu_item = self.current_menu_item.get_ancestors(ascending=True)[0]
+        previous_menu_item = self.current_menu_item.parent
         self.current_menu_item = previous_menu_item
 
     def advance_menu_progress(self, order):
