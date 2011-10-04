@@ -16,7 +16,7 @@ class MenuItem(MPTTModel):
     # Use a context-specific question to ask the user if they wish to enter further optional
     # fields.  An affirmative answer should mean continue, i.e.
     # "do you have more diseases to report?"
-    skip_question = models.CharField(null=True, blank=True)
+    skip_question = models.TextField(null=True, blank=True)
 
     def get_submenu_labels(self):
         '''
@@ -72,20 +72,19 @@ class USSDSession(models.Model):
 
     def advance_menu_progress(self, order):
         try:
-            try:
-                if int(order):
-                    next_menu_item = self.current_menu_item.get_children().get(order=order)
-                    if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
-                        self.current_menu_item = None
-                        self.current_xform = next_menu_item.xform
-                        self.xform_step = self.current_xform.fields.order_by('order')[0].order
-                        self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
-                                                                            has_errors=True)
-                    else:
-                        self.current_menu_item = next_menu_item
-                self.save()
-            except ValueError:
-                raise ValueError("Invalid character")
+            if int(order):
+                next_menu_item = self.current_menu_item.get_children().get(order=order)
+                if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
+                    self.current_menu_item = None
+                    self.current_xform = next_menu_item.xform
+                    self.xform_step = self.current_xform.fields.order_by('order')[0].order
+                    self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
+                                                                        has_errors=True)
+                else:
+                    self.current_menu_item = next_menu_item
+            self.save()
+        except ValueError:
+            raise ValueError("Invalid character")
         except MenuItem.DoesNotExist:
             raise ValueError("Invalid Menu Option. %r" % order)
 
