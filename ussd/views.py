@@ -115,11 +115,13 @@ def ussd(req, input_form=YoForm, request_method='POST', output_template='ussd/yo
         if not action:
             response, action = __render_screen_from_session__(session)
             response_content += response
+    else:
+        response_content = form.errors
 
-        return render_to_response(output_template, {
-            'response_content':urllib.quote(response_content),
-            'action':action,
-        }, context_instance=RequestContext(req))
+    return render_to_response(output_template, {
+        'response_content':urllib.quote(response_content),
+        'action':action,
+    }, context_instance=RequestContext(req))
 
     return HttpResponse(status=404)
 
