@@ -12,7 +12,7 @@ class MenuItem(MPTTModel):
     label = models.CharField(max_length=50)
     xform = models.ForeignKey(XForm, null=True)
     order = models.IntegerField()
-    skip_option = models.IntegerField(default= -1)
+    skip_option = models.IntegerField(max_length=2,default= -1)
     # Use a context-specific question to ask the user if they wish to enter further optional
     # fields.  An affirmative answer should mean continue, i.e.
     # "do you have more diseases to report?"
