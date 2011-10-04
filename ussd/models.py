@@ -13,8 +13,16 @@ class MenuItem(MPTTModel):
     xform = models.ForeignKey(XForm, null=True)
     order = models.IntegerField()
 
+    def get_submenu_labels(self):
+        '''
+        returns the labels of the children of the current MenuItem, in order,
+        for rendering to a display
+        '''
+        return self.get_children().order_by('order').values_list('label', flat=True)
+
     def get_menu_text(self):
         return "\n".join(["%d: %s" % (i.order, i.label) for i in self.get_children().order_by('order')])
+
 
 class USSDSession(models.Model):
     """Model to hold session information"""
@@ -48,8 +56,6 @@ class USSDSession(models.Model):
         elif self.current_xform:
             return self.current_xform.fields.get(order=self.xform_step).question
 
-
-
     def back(self):
         # order is what step the user has to go to
         # self.back is the step the user has to go back
@@ -58,7 +64,7 @@ class USSDSession(models.Model):
 
     def advance_menu_progress(self, order):
         try:
-            if int(order) or order=='#':
+            if int(order) or order == '#':
                 if int(order):
                     next_menu_item = self.current_menu_item.get_children().get(order=order)
                     if next_menu_item.get_children().count() == 0 and next_menu_item.xform:
@@ -74,7 +80,6 @@ class USSDSession(models.Model):
             self.save()
         except MenuItem.DoesNotExist:
             raise ValueError("Invalid Menu Option. %r" % order)
-
 
     def process_xform_response(self, request_string):
         response_content = ''
