@@ -15,6 +15,7 @@ def __render_menu__(menuitem):
     1. Apples
     2. Fruit
     3. MEAT
+    #. Back
     """
     labels = menuitem.get_submenu_labels()
     order = 1
@@ -22,7 +23,9 @@ def __render_menu__(menuitem):
     for label in labels:
         toret.append((order, label,))
         order += 1
-    return "\n".join("%d: %s" % (order, label) for order, label in toret)
+    if menuitem.parent:
+        toret.append(('#', 'Back'))
+    return "\n".join("%s. %s" % (order, label) for order, label in toret)
 
 def __render_skip__(menuitem):
     """
@@ -75,14 +78,14 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
         elif not session.current_xform:
             if request_string:
                 try:
-                    order = int(request_string)
-                    order = session.current_menu_item.get_nth_item(order)
-                    session.advance_menu_progress(order)
-                except ValueError:
                     if request_string == '#':
                         session.back()
                     else:
-                        response_content = "Invalid Menu Option.\n"
+                        order = int(request_string)
+                        order = session.current_menu_item.get_nth_item(order)
+                        session.advance_menu_progress(order)
+                except ValueError:
+                    response_content = "Invalid Menu Option.\n"
 
         elif session.current_xform:
             if session.is_skip_prompt:

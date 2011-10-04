@@ -102,6 +102,8 @@ class USSDSession(models.Model):
         Return to the previous menu in navigation (i.e., the parent MenuItem of the
         current one).
         '''
+        if not self.current_menu_item or not self.current_menu_item.parent:
+            raise ValueError("Can't move back from this menu!")
         previous_menu_item = self.current_menu_item.parent
         self.current_menu_item = previous_menu_item
         self.save()
