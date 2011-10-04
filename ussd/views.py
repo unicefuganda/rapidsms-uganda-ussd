@@ -36,8 +36,8 @@ def __render_skip__(menuitem):
     question = menuitem.skip_question or "Do you want to continue?"
     return "\n".join([question, '1. Yes', '2. No'])
 
-def __render_data_input__(menuitem):
-    return menuitem.current_xform.fields.get(order=menuitem.xform_step).question
+def __render_data_input__(session):
+    return session.current_xform.fields.get(order=session.xform_step).question
 
 def __render_screen_from_session__(ussdsession):
     """
@@ -46,18 +46,18 @@ def __render_screen_from_session__(ussdsession):
     session state
     """
     if ussdsession.error_case():
-        return 'Your session has ended. Thank you.', 'end'
+        return ('Your session has ended. Thank you.', 'end',)
     elif not ussdsession.current_xform:
         # We're just doing regular navigation
-        return __render_menu__(ussdsession.current_menu_item), 'request'
-    elif ussdsession.current_menu_item.skip_option == ussdsession.current_menu_item.xform_step and \
+        return (__render_menu__(ussdsession.current_menu_item), 'request',)
+    elif ussdsession.current_menu_item.skip_option == ussdsession.xform_step and \
         ussdsession.is_skip_prompt:
         # We're in the middle of collecting a form, and we've reached the point where
         # we prompt the user if they want to continue
-        return __render_skip__(ussdsession.current_menu_item), 'request'
+        return (__render_skip__(ussdsession.current_menu_item), 'request',)
     else:
         # This is a regular data collection step, just ask the appropriate question
-        return __render_data_input__(ussdsession.current_menu_item), 'request'
+        return (__render_data_input__(ussdsession), 'request',)
 
 def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.txt'):
     form = None
