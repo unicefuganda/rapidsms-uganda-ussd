@@ -12,6 +12,11 @@ class MenuItem(MPTTModel):
     label = models.CharField(max_length=50)
     xform = models.ForeignKey(XForm, null=True)
     order = models.IntegerField()
+    skip_option = models.IntegerField(default= -1)
+    # Use a context-specific question to ask the user if they wish to enter further optional
+    # fields.  An affirmative answer should mean continue, i.e.
+    # "do you have more diseases to report?"
+    skip_question = models.CharField(null=True, blank=True)
 
     def get_submenu_labels(self):
         '''
@@ -40,6 +45,9 @@ class USSDSession(models.Model):
     current_menu_item = models.ForeignKey('MenuItem', null=True)
     current_xform = models.ForeignKey(XForm, null=True)
     submission = models.ForeignKey(XFormSubmission, null=True)
+
+    # Is the current screen a prompt to skip the remaining fields in an xform
+    is_skip_prompt = models.BooleanField(default=False)
 
     #create XForm models and preferably fk to that.
     xform_step = models.IntegerField(null=True)
