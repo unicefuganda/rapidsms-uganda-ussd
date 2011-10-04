@@ -178,7 +178,7 @@ class MenuInteractionTests(TestCase):
         self.assertSessionNavigation('whoa', '', __render_menu__(self.root_menu))
         self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
         self.assertSessionNavigation('whoa', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % self.getMenuItem([3]))
+        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % __render_menu__(self.getMenuItem([3])))
         self.assertSessionNavigation('whoa', '2', __render_menu__(self.getMenuItem([3, 2])))
         self.assertSessionNavigation('whoa', '2', 'How old are you?')
         # bad user says he is "strawberry" years old

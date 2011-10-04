@@ -105,7 +105,7 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
             else:
                 try:
                     if not session.process_xform_response(request_string):
-                        response_content = "Your session has ended. Thank you."
+                        response_content = session.current_xform.response
                         action = 'end'
                 except ValidationError, e:
                     response_content = "\n".join(e.messages)

@@ -95,7 +95,8 @@ class USSDSession(models.Model):
         must be ended, False if everything's okay
         '''
         return not (self.current_menu_item or self.current_xform) or \
-            (self.current_menu_item and self.current_menu_item.get_children().count() == 0)
+            (self.current_menu_item and self.current_menu_item.get_children().count() == 0 and \
+             not self.current_xform)
 
     def back(self):
         '''
@@ -146,12 +147,13 @@ class USSDSession(models.Model):
             self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
             if self.current_menu_item.skip_option == self.xform_step:
                 self.is_skip_prompt = True
-                self.save()
-                # if submission complete, return True
-                return True
+            # if submission isn't complete, return True ('True' => collect more data)
+            self.save()
+            return True
         except IndexError:
             self.submission.has_errors = False
             self.submission.response = self.current_xform.response
             xform_received.send(sender=self.current_xform, xform=self.current_xform, submission=self.submission)
             self.submission.save()
             return False
+
