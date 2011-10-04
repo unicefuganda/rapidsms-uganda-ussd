@@ -68,31 +68,45 @@ def ussd(req, input_form=YoForm, request_method='GET', output_template='ussd/yo.
     if form and form.is_valid():
         session = form.cleaned_data['transactionId']
         request_string = form.cleaned_data['ussdRequestString']
-        response_content = ''
-        if session.current_menu_item:
+        response_content = None
+        action = None
+        if session.error_case():
+            response_content, action = __render_screen_from_session__(session)
+        elif not session.current_xform:
             if request_string:
                 try:
-                    order = request_string
-                    if int(order):
-                        session.advance_menu_progress(order)
-                    elif order == '#':
+                    order = int(request_string)
+                    session.advance_menu_progress(order)
+                except ValueError:
+                    if order == '#':
                         session.back()
                     else:
-                        print "no acceptable response" #TODO replace with an exception
-                except ValueError:
-                    order = -1
-                    response_content += "Invalid Menu Option.\n"
-
-            if session.error_case():
-                response_content = 'Your session has ended. Thank you.'
-                action = 'end'
-
-            else:
-                response_content += session.get_menu_text()
-                action = 'request'
+                        response_content = "Invalid Menu Option.\n"
 
         elif session.current_xform:
-            response_content, action = session.process_xform_response(request_string)
+            if session.is_skip_prompt:
+                try:
+                    choice = int(request_string)
+                    if choice == 1:
+                        # Done with the skip prompt, user wants to continue
+                        session.is_skip_prompt = False
+                        session.save()
+                    elif choice == 2:
+                        response_content = "Your session has ended. Thank you."
+                        action = 'end'
+                    else:
+                        response_content = "Invalid Menu Option.\n"
+                except ValueError:
+                    response_content = "Invalid Menu Option.\n"
+            else:
+                try:
+                    session.process_xform_response(request_string)
+                except ValidationError, e:
+                    response_content = "\n".join(e.messages)
+
+        if not action:
+            response, action = __render_screen_from_session__(session)
+            response_content += response
 
         return render_to_response(output_template, {
             'response_content':urllib.quote(response_content),
