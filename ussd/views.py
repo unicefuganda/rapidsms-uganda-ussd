@@ -40,7 +40,7 @@ def __render_skip__(menuitem):
     return "\n".join([question, '1. Yes', '2. No'])
 
 def __render_data_input__(session):
-    return session.current_xform.fields.get(order=session.xform_step).question
+    return session.current_xform.fields.get(order=session.xform_step).question or ''
 
 def __render_screen_from_session__(ussdsession):
     """
