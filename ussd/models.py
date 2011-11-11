@@ -2,64 +2,247 @@ from django.db import models
 from django.forms import ValidationError
 from mptt.models import MPTTModel
 from rapidsms.models import Contact, Connection
+from uganda_common.models import PolymorphicManager, PolymorphicMixin
 
-from rapidsms_xforms.models import XForm, XFormSubmission, xform_received
+from rapidsms_xforms.models import XForm, XFormSubmission, XFormSubmissionValue, XFormField, xform_received
+import django
 import mptt
+from django.conf import settings
 
+# fired right before each screen gets a chance to process its input
+ussd_pre_transition = django.dispatch.Signal(providing_args=["screen", "input", "session"])
+ussd_complete = django.dispatch.Signal(providing_args=["session"])
 
-class MenuItem(MPTTModel):
-    # This is the previous Menu Item in terms of navigation
-    parent = models.ForeignKey('self', null=True, blank=True, related_name='children')
+class BackNavigation(Exception):
+    """
+    Can be thrown by screens based on particular input, or by 
+    signal handlers, causing a back navigation.  This will pop the navigation stack and
+    allow users to move to the previous navigation without storing any
+    additional records in the session.
+    """
+    pass
+
+class TransitionException(Exception):
+    """
+    Fired by pre_transition signal handlers to interrupt the normal
+    flow of the USSD session.  These handlers will specify the screen
+    that the session should jump to by raising this exception, with
+    the appropriate screen set.
+    """
+    def __init__(self, screen, **kwargs):
+        Exception.__init__(self, **kwargs)
+        self.screen = screen
+
+class Screen(MPTTModel, PolymorphicMixin):
+    """
+    This is the parent class for all Screen Types.  Subclasses must implement, at
+    a minimum, the following:
+    * __unicode()__ : This is what is displayed to the user's mobile when they navigate
+     to this screen
+    * accept_input : After this screen is displayed to their user, this screen gets a chance
+    to react based on the input, using the functionality in this method.
+    Optionally, the subclass can override
+    get_label() and is_terminal() to add custom behavior
+    """
+    # Because subclasses override *methods*, but will normally be retrieved by the
+    # Screen superclass, we need a way to dynamically downcast to the most specific
+    # class type to invoke __unicode__, accept_input, etc.
+    objects = PolymorphicManager()
+
+    def __unicode__(self):
+        raise NotImplementedError('Subclasses must override this method')
+
+    def accept_input(self, input, session=None):
+        raise NotImplementedError('Subclasses must override this method')
+
+    def is_terminal(self):
+        return True
+
+    slug = models.SlugField(primary_key=True)
 
     # The label to display when navigating to this submenu
     label = models.CharField(max_length=50)
 
-    # an XForm, for "leaf" menu items that drop the user straight into a question-and-answer
-    # session for collecting a form
-    xform = models.ForeignKey(XForm, null=True, blank=True)
+    # The order this item should be displayed from it's parent menu, if 
+    # the parent *is-a* menu
+    # (ignored for non-menu classes)
+    order = models.IntegerField(default=0)
 
-    # The order this menu item should be displayed from it's parent menu
-    order = models.IntegerField()
+    # This is the previous Screen in terms of navigation (for tree-based, menued navigation)
+    parent = models.ForeignKey('self', null=True, blank=True, related_name='children')
 
-    # The step in the xform (corresponding to the field order),
-    # before which the user should be prompted if they want to continue entering data 
-    skip_option = models.IntegerField(default= -1)
+    def get_label(self):
+        """
+        In the case of menus, it is the label of the children that are displayed
+        as menu options.
+        """
+        return self.label
 
-    # Use a context-specific question to ask the user if they wish to enter further optional
-    # fields.  An affirmative answer should mean continue, i.e.
-    # "do you have more diseases to report?"
-    skip_question = models.TextField(null=True, blank=True)
+
+class Menu(Screen, PolymorphicMixin):
+    """
+    Menus are basic navigational screens, allow the user to move from this screen
+    to one of the menu's children by selecting a number, or '#' to move backwards
+    to the previous menu (if one exists).
+    """
+    objects = PolymorphicManager()
+
+    has_errors = False
+    error_text = ''
+
+    def __unicode__(self):
+        """
+        This renders a standard menu, based on the children of the 
+        current menu item.  An example might be:
+
+        1. Apples
+        2. Fruit
+        3. MEAT
+        #. Back
+        """
+        order = 1
+        toret = []
+        for label in self.get_submenu_labels():
+            toret.append((order, label,))
+            order += 1
+
+        if self.parent:
+            toret.append(('#', 'Back'))
+        toret = "\n".join("%s. %s" % (order, label) for order, label in toret)
+
+        if self.has_errors:
+            toret = "%s\n%s" % (self.error_label, toret)
+
+        return toret
 
     def get_submenu_labels(self):
         '''
-        returns the labels of the children of the current MenuItem, in order,
+        returns the labels of the children of the current MenuItem, as an iterable,
         for rendering to a display
         
         example return value:
         ['meat','vegetables','fruits']
         '''
-        return self.get_children().order_by('order').values_list('label', flat=True)
+        for c in self.get_children().order_by('order'):
+            yield c.get_label()
 
-    def get_nth_item(self, num):
-        '''
-        return the order number of a child menu item, based on its actual order relative to 
-        this node.
-        For example, if the children of this MenuItem have orders of 2, 4 and 6,
-        get_nth_item(2) would return 4 the `order` of the *second* child MenuItem.
-        
-        If this menu doesnt have n children, a ValueError is thrown.
-        '''
+    def is_terminal(self):
+        return self.get_children().count() == 0
+
+    def accept_input(self, input, session=None):
         try:
-            return self.get_children().order_by('order')[num - 1].order
-        except IndexError:
-            raise ValueError("menu out of valid range")
+            order = int(input)
+            return self.get_children().get(order=order)
+        except ValueError:
+            if input == '#':
+                raise BackNavigation()
+            # else fall through to error case
+        except Screen.DoesNotExist:
+            pass
+
+        self.has_errors = True
+        self.error_label = "Invalid Menu Option."
+        return self
+
+
+class Question(Screen, PolymorphicMixin):
+    """
+    Question is a generic class for gathering questions that aren't necessarily
+    tied to actual data to be gathered.  Should be subclassed for custom branching
+    logic (see Field).
+    """
+    objects = PolymorphicManager()
+
+    has_errors = False
+    error_text = ''
+
+    question_text = models.TextField()
+
+    # Questions aren't menus, so there's only one default screen
+    # to advance to after asking the question. 
+    next = models.ForeignKey(Screen, null=True, related_name='previous')
+
+    def get_question(self):
+        return self.question_text
+
+    def is_terminal(self):
+        return self.next is None
+
+    def accept_input(self, input, session=None):
+        """
+        Simply advance to the next screen. Subclasses will likely override
+        this default behavior.
+        """
+        return next
+
+
+class Field(Question, PolymorphicMixin):
+    """
+    Fields are questions whose answers map to an XFormField.  As this is an
+    integral part of what our USSD sessions are about, the XFormSubmissions that
+    are created from these fields are stored on the USSD session object itself.
+    """
+    objects = PolymorphicManager()
+
+    # The field this question is associated with
+    field = models.ForeignKey(XFormField)
+
+    def get_question(self):
+        # Can use the built-in xformfield question, or a custom question
+        return self.field.question or Question.get_question(self)
+
+    def accept_input(self, input, session=None):
+        try:
+            field = self.field
+            val = field.clean_submission(input, 'ussd')
+
+            # try to get an existing submission
+            try:
+                submission = session.submissions.get(xform=self.field.xform)
+            except XFormSubmission.DoesNotExist:
+                submission = XFormSubmission.objects.create(xform=self.field.xform, has_errors=True)
+                session.submissions.add(submission)
+
+            try:
+                # try deleting any previous values for this amount
+                subval = submission.values.get(attribute=self.field, entity_id=submission.pk)
+                subval.delete()
+            except XFormSubmissionValue.DoesNotExist:
+                pass
+
+            submission.values.create(attribute=self.field, value=val, entity=submission)
+            return self.next
+        except ValidationError, e:
+            self.error_text = "\n".join(e.messages)
+            self.has_errors = True
+            return self
 
     def __unicode__(self):
-        return "%d: %s" % (self.order, self.label)
+        if self.has_errors:
+            return "%s\n%s" (self.error_text, self.get_question())
+
+        return self.get_question()
 
 
-class USSDSession(models.Model):
-    """Model to hold session information"""
+class StubScreen(Screen, PolymorphicMixin):
+
+    objects = PolymorphicManager()
+    """
+    This is a stub for passing to the view, used in special cases 
+    (backwards navigation, unexpected ending) that isn't
+    stored in the session.
+    """
+    terminal = models.BooleanField(default=True)
+    text = models.TextField(default='Your session has ended, thank you.', null=False)
+
+    def __unicode__(self):
+        return self.text
+
+    def is_terminal(self):
+        return self.terminal
+
+
+class Session(models.Model):
 
     #a unique session identifier which is maintained for an entire USSD session/transaction
     transaction_id = models.CharField(max_length=100)
@@ -68,93 +251,94 @@ class USSDSession(models.Model):
     # match this with 'msisdn'
     connection = models.ForeignKey(Connection)
 
-    #The information that the subscriber inputs to the system.
-    ussd_request_string = models.CharField(max_length=100)
+    submissions = models.ManyToManyField(XFormSubmission)
 
-    # The current menu item, i.e. its *children* will be rendered
-    # during the next dialogue
-    current_menu_item = models.ForeignKey('MenuItem', null=True)
+    def get_initial_screen(self):
+        try:
+            toret = getattr(settings, 'INITIAL_USSD_SCREEN', Screen.tree.root_nodes()[0])
+            if callable(toret):
+                toret = toret()
+            return Screen.objects.get(slug=toret)
+        except IndexError:
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured('You need to supply an INITIAL_USSD_SCREEN variable in your settings.py')
+        except Screen.DoesNotExist:
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured("You need to supply a proper INITIAL_USSD_SCREEN variable in your settings.py, not Screen with slug '%s' was found" % toret)
 
-    # The current xform, if the user has now navigated to an
-    # xform and is actively answering questions attributed to a report
-    current_xform = models.ForeignKey(XForm, null=True)
-
-    # The submission the user is building as a result of this USSD session
-    submission = models.ForeignKey(XFormSubmission, null=True)
-
-    # Is the current screen a prompt to skip the remaining fields in an xform
-    is_skip_prompt = models.BooleanField(default=False)
-
-    #the step that the user has reached during questioning e.g. during a poll
-    xform_step = models.IntegerField(null=True)
-
-    def error_case(self):
-        '''
-        This is the equivalent of an ImproperlyConfiguredException...
-        i.e., this particular MenuItem tree is not correctly navigable, and has
-        potential situations where the user has nothing further to do.  In this
-        case, fail gracefully (or not-so-gracefully) by telling the user their 
-        session has ended.  Returns True if the session is in an error state and 
-        must be ended, False if everything's okay
-        '''
-        return not (self.current_menu_item or self.current_xform) or \
-            (self.current_menu_item and self.current_menu_item.get_children().count() == 0 and \
-             not self.current_xform)
+    def last_screen(self):
+        try:
+            return self.navigations.latest('date').screen
+        except Navigation.DoesNotExist:
+            return None
 
     def back(self):
         '''
-        Return to the previous menu in navigation (i.e., the parent MenuItem of the
-        current one).
+        Return to the previous menu in navigation (i.e., the second-to-last screen
+        in navigations).
         '''
-        if not self.current_menu_item or not self.current_menu_item.parent:
-            raise ValueError("Can't move back from this menu!")
-        previous_menu_item = self.current_menu_item.parent
-        self.current_menu_item = previous_menu_item
-        self.save()
+        navs = self.navigations.order_by('-date')
+        if navs.count():
+            navs[0].delete()
 
-    def advance_menu_progress(self, order):
+        # don't return the screens unicode method, as this may not
+        # have the full text we're looking for (screens can supply
+        # state-driven text that we will have lost at this point).
+        try:
+            return self.navigations.all().latest('date').text
+        except Navigation.DoesNotExist:
+            return StubScreen().text
+
+
+    def advance_progress(self, input):
         '''
         Navigate down the tree, based on the number the user has input.
         '''
-        try:
-            order = int(order)
-            self.current_menu_item = self.current_menu_item.get_children().get(order=order)
-            if self.current_menu_item.get_children().count() == 0 and self.current_menu_item.xform:
-                self.current_xform = self.current_menu_item.xform
-                self.xform_step = self.current_xform.fields.order_by('order')[0].order
-                self.submission = XFormSubmission.objects.create(xform=self.current_xform, \
-                                                                    has_errors=True)
-            self.save()
-        except ValueError:
-            raise ValueError("Invalid character")
-        except MenuItem.DoesNotExist:
-            raise ValueError("Invalid Menu Option. %r" % order)
+        screen = self.last_screen()
+        if not screen:
+            screen = self.get_initial_screen()
+            self.navigations.create(session=self, screen=screen, text=str(screen.downcast()))
+            return screen.downcast()
 
-    def process_xform_response(self, request_string):
-        '''
-        This method processes the current request_string, based on the progress along
-        this particular XForm (based on current_xform and xform_step).  If, after processing
-        this step, the session has reached the skip_option question, the session will update
-        is_skip_prompt to True (TODO).  After processing the current field (and raising any ValidationErrors
-        that may occur), this method attempts to advance to the next XFormField in the XForm.
-
-        (TODO) Returns True if there are more fields to gather, False if the XFormSubmission is complete.
-        '''
+        nav = self.navigations.latest('date')
+        nav.response = input
+        nav.save()
 
         try:
-            field = self.current_xform.fields.get(order=self.xform_step)
-            val = field.clean_submission(request_string, 'ussd')
-            self.submission.values.create(attribute=field, value=val, entity=self.submission)
-            self.xform_step = self.current_xform.fields.filter(order__gt=self.xform_step).order_by('order')[0].order
-            self.is_skip_prompt = (self.current_menu_item.skip_option == self.xform_step)
+            ussd_pre_transition.send(sender=self, screen=screen, input=input, session=self)
+            next = screen.downcast().accept_input(input, self)
+            if not next:
+                # this is actually an improperly configured USSD menu, but
+                # we're relaxing constraints and not blowing up in the
+                # case of a leaf node without any successor screen
+                next = StubScreen()
+            self.navigations.create(session=self, screen=next, text=str(next.downcast()))
+            return next.downcast()
+        except BackNavigation:
+            return StubScreen(text=self.back(), terminal=False)
+        except TransitionException as e:
+            next = e.screen
+            self.navigations.create(session=self, screen=next, text=str(next.downcast()))
+            return next.downcast()
 
-            # if submission isn't complete, return True ('True' => collect more data)
-            self.save()
-            return True
-        except IndexError:
-            self.submission.has_errors = False
-            self.submission.response = self.current_xform.response
-            xform_received.send(sender=self.current_xform, xform=self.current_xform, submission=self.submission)
-            self.submission.save()
-            return False
+    def complete(self):
+        self.submissions.update(has_errors=False)
+        ussd_complete.send(sender=self, session=self)
+
+
+class Navigation(models.Model):
+    """
+    A Navigation is a record of a single screen that the user viewed, and together
+    these comprise a stack of navigations the user has made within a session.  Because
+    the text rendered to screen may be state-driven (i.e., based on erroneous input, etc.)
+    The actual text sent is stored, along with the Screen that generated it.  In this way,
+    when a user navigates backwards, they'll receive the previous text sent, not the stateless
+    screen text from an initial navigation.
+    """
+    screen = models.ForeignKey(Screen)
+    text = models.TextField()
+    response = models.TextField()
+    date = models.DateTimeField(auto_now_add=True)
+    session = models.ForeignKey(Session, related_name='navigations')
+
 

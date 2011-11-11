@@ -4,41 +4,69 @@ from django.test.client import RequestFactory
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.contrib.sites.models import Site
+from django.conf import settings
+from django.core.management import call_command
+from django.db.models import loading
+from rapidsms.models import Connection, Backend
 from rapidsms_xforms.models import XForm, XFormField, XFormSubmission
-from ussd.models import MenuItem
-from ussd.views import ussd, __render_menu__
+from rapidsms.contrib.locations.models import Location, LocationType
+from ussd.models import Menu, Field, StubScreen, Screen, TransitionException, Session, Navigation
+from ussd.views import ussd
 import datetime
 import urllib
 
-class BasicTest(TestCase):
+class ViewTest(TestCase):
 
-    def testNoExplosions(self):
-        client = Client()
-        # No menu in the DB, this should still return something
-        url = reverse('ussd.views.ussd')
-        print "url is %s" % url
-        response = client.get(reverse('ussd.views.ussd'), {\
-            'transactionId':'foo', \
-            'transactionTime':'20110101T01:01:01',
-            'msisdn':'8675309',
-            'ussdServiceCode':'300',
-            'ussdRequestString':'',
-        })
-        self.assertEquals(response.status_code, 404)
+    def setUp(self):
+        # Lots of things blow up if there's not a single location
+        t = LocationType.objects.create(name='country', slug='county')
+        Location.objects.create(name='Uganda', type=t)
 
-class MenuInteractionTests(TestCase):
+        root_menu = Menu.objects.create(slug='ussd_root', label="Ignored", order=1)
+        self.factory = RequestFactory()
+        self.url = reverse('ussd.views.ussd')
+        child1 = Menu.objects.create(slug='child1', label="Apples", order=1, parent=root_menu)
+        Menu.objects.create(slug='child11', label="Golden Delicious", order=1, parent=child1)
+        Menu.objects.create(slug='child12', label="Granny Smith", order=2, parent=child1)
 
-    def __create_menu_recurse__(self, parent, menulist):
-        order = 1
-        for label, submenu in menulist:
-            menu_item = MenuItem.objects.create(order=order, label=label, parent=parent, xform=None)
-            self.__create_menu_recurse__(menu_item, submenu)
-            order += 1
+        User.objects.create_user('test', 'test@test.com', 'test')
+        xform = XForm.objects.create(keyword='test', name='test xform', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
+        field1 = XFormField.objects.create(xform=xform, name='t1', field_type=XFormField.TYPE_INT, command='test_t1', question='How old are you?', order=0)
+        field2 = XFormField.objects.create(xform=xform, name='t2', field_type=XFormField.TYPE_INT, command='test_t2', question='How many tests have you run?', order=1)
+        xform2 = XForm.objects.create(keyword='test2', name='test xform2', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
+        field21 = XFormField.objects.create(xform=xform2, name='t1', field_type=XFormField.TYPE_INT, command='test2_t1', question='How tall are you (in)?', order=0)
+        field22 = XFormField.objects.create(xform=xform2, name='t2', field_type=XFormField.TYPE_INT, command='test2_t2', question='How many tests will fail?', order=1)
+        stub = StubScreen.objects.create(slug='stubby')
+        fmenu2 = Field.objects.create(\
+                    slug='test_t2', \
+                    field=field2, \
+                    question_text=field2.question, \
+                    order=0, \
+                    next=stub)
+        fmenu1 = Field.objects.create(\
+                    slug='test_t1', \
+                    field=field1, \
+                    question_text=field1.question, \
+                    next=fmenu2, \
+                    label='Oranges', \
+                    order=2, \
+                    parent=root_menu)
+        fmenu22 = Field.objects.create(\
+                    slug='test2_t2', \
+                    field=field22, \
+                    question_text=field22.question, \
+                    order=0, \
+                    next=fmenu1)
+        fmenu21 = Field.objects.create(\
+                    slug='test2_t1', \
+                    field=field21, \
+                    question_text=field21.question, \
+                    next=fmenu22, \
+                    label='Grapefruit', \
+                    order=4, \
+                    parent=root_menu)
 
-    def __create_menu__(self, menulist):
-        self.root_menu = MenuItem.objects.create(order=0, label='root', parent=None, xform=None)
-        self.__create_menu_recurse__(self.root_menu, menulist)
-        self.root_menu = MenuItem.objects.get(pk=self.root_menu.pk)
+        Menu.objects.create(slug='child3', label="Bananas", order=3, parent=root_menu)
 
     def assertSessionNavigation(self, transaction_id, request, expected_response, action='request'):
         response = ussd(self.factory.post(self.url, {\
@@ -50,147 +78,66 @@ class MenuInteractionTests(TestCase):
         }))
         self.assertEquals(response.content, 'responseString=%s&action=%s' % (urllib.quote(expected_response), action))
 
-    def getMenuItem(self, order_list):
-        to_ret = self.root_menu
-        for num in order_list:
-            to_ret = to_ret.get_children().get(order=num)
-        return to_ret
-
-    def setUp(self):
-        self.user = User.objects.create_user('test', 'test@test.com', 'test')
-        self.factory = RequestFactory()
-        self.url = reverse('ussd.views.ussd')
-        self.__create_menu__(\
-            [('Fruits', []),
-             ('Vegetables', [('Pointless Rabit Food', [('Carrots', [])])]),
-             ('MEAT', [
-                 ('Bacon', []),
-                 ('Chicken', [('Spicy', []), ('Fried', []), ('Cajun', [])]),
-                 ('Turducken', [])
-             ])]
-        )
-        self.back = '#'
-
-    def testDepth(self):
-        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([2])))
-        self.assertSessionNavigation('foo', '#', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([2])))
-        self.assertSessionNavigation('foo', '1', __render_menu__(self.getMenuItem([2, 1])))
-
-        self.assertSessionNavigation('foo', '1', 'Your session has ended. Thank you.', action='end')
-
-
-    def testBreadth(self):
-        self.assertSessionNavigation('bar', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('bar', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('bar', '2', __render_menu__(self.getMenuItem([3, 2])))
-        self.assertSessionNavigation('bar', '2', 'Your session has ended. Thank you.', action='end')
-
-    def testBackwardsForwards(self):
-        hash = self.back
-        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([2])))
-        self.assertSessionNavigation('foo', '1', __render_menu__(self.getMenuItem([2, 1])))
-        self.assertSessionNavigation('foo', hash, __render_menu__(self.getMenuItem([2])))
-        self.assertSessionNavigation('foo', hash, __render_menu__(self.root_menu))
-
-        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('foo', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([3, 2])))
-        self.assertSessionNavigation('foo', hash, __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('foo', hash, __render_menu__(self.root_menu))
-        # Don't allow backwards navigation from the root
-        self.assertSessionNavigation('foo', hash, "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
+    def testMenu(self):
+        self.assertSessionNavigation('foo', '', str(Menu.objects.get(slug='ussd_root')))
+        self.assertSessionNavigation('foo', '1', str(Menu.objects.get(slug='child1')))
 
     def testBadMenuSelect(self):
-        self.assertSessionNavigation('whoa', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
-        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
+        self.assertSessionNavigation('foo', '', str(Menu.objects.get(slug='ussd_root')))
+        self.assertSessionNavigation('foo', '27', "Invalid Menu Option.\n%s" % str(Menu.objects.get(slug='ussd_root')))
 
-    def testXFormSubmission(self):
-        xform = XForm.objects.create(keyword='test', name='test xform', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
-        xform.fields.create(xform=xform, name='t1', field_type=XFormField.TYPE_INT, command='test_t1', question='How old are you?', order=0)
-        xform.fields.create(xform=xform, name='t2', field_type=XFormField.TYPE_INT, command='test_t2', question='How many tests have you run?', order=1)
-        mi = self.getMenuItem([3, 2, 2])
-        mi.xform = xform
-        mi.save()
-
-        self.assertSessionNavigation('bar', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('bar', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('bar', '2', __render_menu__(self.getMenuItem([3, 2])))
-        self.assertSessionNavigation('bar', '2', 'How old are you?')
-        self.assertSessionNavigation('bar', '27', 'How many tests have you run?')
-        self.assertSessionNavigation('bar', '270', 'thanks for testing', action='end')
+    def testField(self):
+        self.assertSessionNavigation('foo', '', str(Menu.objects.get(slug='ussd_root')))
+        self.assertSessionNavigation('foo', '2', str(Field.objects.get(slug='test_t1')))
+        self.assertSessionNavigation('foo', '45', str(Field.objects.get(slug='test_t2')))
+        self.assertSessionNavigation('foo', '27', str(StubScreen()), action='end')
 
         self.assertEquals(XFormSubmission.objects.count(), 1)
         submission = XFormSubmission.objects.all()[0]
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 27)
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 270)
-        self.failIf(submission.has_errors)
+        self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 45)
+        self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 27)
 
-    def testXFormSkip(self):
-        xform = XForm.objects.create(keyword='test', name='test xform', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
-        xform.fields.create(xform=xform, name='t1', field_type=XFormField.TYPE_INT, command='test_t1', question='How old are you?', order=0)
-        xform.fields.create(xform=xform, name='t2', field_type=XFormField.TYPE_INT, command='test_t2', question='How many tests have you run?', order=1)
-        mi = self.getMenuItem([3, 2, 2])
-        mi.xform = xform
-        mi.skip_option = 1
-        mi.skip_question = "Do you want to keep testing?"
-        mi.save()
+    def testBack(self):
+        self.assertSessionNavigation('foo', '', str(Menu.objects.get(slug='ussd_root')))
+        self.assertSessionNavigation('foo', '1', str(Menu.objects.get(slug='child1')))
+        self.assertSessionNavigation('foo', '#', str(Menu.objects.get(slug='ussd_root')))
 
-        self.assertSessionNavigation('bar', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('bar', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('bar', '2', __render_menu__(self.getMenuItem([3, 2])))
-        self.assertSessionNavigation('bar', '2', 'How old are you?')
-        self.assertSessionNavigation('bar', '27', 'Do you want to keep testing?\n1. Yes\n2. No')
-        self.assertSessionNavigation('bar', '1', 'How many tests have you run?')
-        self.assertSessionNavigation('bar', '270', 'thanks for testing', action='end')
-
-        self.assertEquals(XFormSubmission.objects.count(), 1)
-        submission = XFormSubmission.objects.all()[0]
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 27)
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 270)
-        self.failIf(submission.has_errors)
-
-        self.assertSessionNavigation('foo', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('foo', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('foo', '2', __render_menu__(self.getMenuItem([3, 2])))
-        self.assertSessionNavigation('foo', '2', 'How old are you?')
-        self.assertSessionNavigation('foo', '28', 'Do you want to keep testing?\n1. Yes\n2. No')
-        self.assertSessionNavigation('foo', '2', 'thanks for testing', action='end')
+    def testMultiSubmission(self):
+        self.assertSessionNavigation('foo', '', str(Menu.objects.get(slug='ussd_root')))
+        self.assertSessionNavigation('foo', '4', str(Field.objects.get(slug='test2_t1')))
+        self.assertSessionNavigation('foo', '45', str(Field.objects.get(slug='test2_t2')))
+        self.assertSessionNavigation('foo', '27', str(Field.objects.get(slug='test_t1')))
+        self.assertSessionNavigation('foo', '314', str(Field.objects.get(slug='test_t2')))
+        self.assertSessionNavigation('foo', '56', str(StubScreen()), action='end')
 
         self.assertEquals(XFormSubmission.objects.count(), 2)
-        submission = XFormSubmission.objects.exclude(pk=submission.pk)[0]
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 28)
-        self.failIf(submission.has_errors)
+        submission1 = XFormSubmission.objects.get(xform__keyword='test')
+        submission2 = XFormSubmission.objects.get(xform__keyword='test2')
+        self.assertEquals(submission1.values.get(attribute__slug='test_test_t1').value_int, 314)
+        self.assertEquals(submission1.values.get(attribute__slug='test_test_t2').value_int, 56)
+        self.assertEquals(submission2.values.get(attribute__slug='test2_test2_t1').value_int, 45)
+        self.assertEquals(submission2.values.get(attribute__slug='test2_test2_t2').value_int, 27)
 
+    def testTransitionException(self):
+        class ExceptionScreen(Screen):
+            def __unicode__(self):
+                return "Ready to Jump?"
+            def accept_input(self, input, session):
+                raise TransitionException(screen=StubScreen.objects.get(slug='stubby'))
 
+        class ExceptionSession(Session):
+            class Meta:
+                proxy = True
 
-    def testBadXFormSubmission(self):
-        xform = XForm.objects.create(keyword='test', name='test xform', response='thanks for testing', owner=User.objects.get(username='test'), site=Site.objects.get_current())
-        xform.fields.create(xform=xform, name='t1', field_type=XFormField.TYPE_INT, command='test_t1', question='How old are you?', order=0)
-        xform.fields.create(xform=xform, name='t2', field_type=XFormField.TYPE_INT, command='test_t2', question='How many tests have you run?', order=1)
-        mi = self.getMenuItem([3, 2, 2])
-        mi.xform = xform
-        mi.save()
+            def last_screen(self):
+                return ExceptionScreen()
 
-        self.assertSessionNavigation('whoa', '', __render_menu__(self.root_menu))
-        self.assertSessionNavigation('whoa', '27', "Invalid Menu Option.\n%s" % __render_menu__(self.root_menu))
-        self.assertSessionNavigation('whoa', '3', __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('whoa', 'apples', "Invalid Menu Option.\n%s" % __render_menu__(self.getMenuItem([3])))
-        self.assertSessionNavigation('whoa', '2', __render_menu__(self.getMenuItem([3, 2])))
-        self.assertSessionNavigation('whoa', '2', 'How old are you?')
-        # bad user says he is "strawberry" years old
-        self.assertSessionNavigation('whoa', 'strawberry', '+test_t1 parameter must be an even number.How old are you?')
+            @property
+            def navigations(self):
+                return Navigation.objects.all()
 
-        self.assertSessionNavigation('whoa', '20', 'How many tests have you run?')
-        # bad user types an invalid value "what?", he probably thought this is conversational.
-        self.assertSessionNavigation('whoa', 'what?', '+test_t2 parameter must be an even number.How many tests have you run?')
-        self.assertSessionNavigation('whoa', '270', 'thanks for testing', action='end')
+        c = Connection.objects.create(identity='8675309', backend=Backend.objects.create(name='dummy'))
+        s = ExceptionSession.objects.create(connection=c, transaction_id='foo')
+        n = Navigation.objects.create(screen=StubScreen.objects.create(text='first', slug='notherstub'), session=s, text='ready to jump?')
+        self.assertEquals(s.advance_progress('yes'), StubScreen.objects.get(slug='stubby'))
 
-        self.assertEquals(XFormSubmission.objects.count(), 1)
-        submission = XFormSubmission.objects.all()[0]
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t1').value_int, 20)
-        self.assertEquals(submission.values.get(attribute__slug='test_test_t2').value_int, 270)
-        self.failIf(submission.has_errors)

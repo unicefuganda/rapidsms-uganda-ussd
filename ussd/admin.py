@@ -1,7 +1,9 @@
 from django.contrib import admin
-from .models import USSDSession, MenuItem
+from .models import Menu, Question, Field
 
-admin.site.register(MenuItem)
-admin.site.register(USSDSession)
+admin.site.register(Question)
+admin.site.register(Field)
+admin.site.register(Menu)
+
 
 
