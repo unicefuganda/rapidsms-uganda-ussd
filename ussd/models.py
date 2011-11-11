@@ -176,6 +176,13 @@ class Question(Screen, PolymorphicMixin):
         return next
 
 
+    def __unicode__(self):
+        if self.has_errors:
+            return "%s\n%s" (self.error_text, self.get_question())
+
+        return self.get_question()
+
+
 class Field(Question, PolymorphicMixin):
     """
     Fields are questions whose answers map to an XFormField.  As this is an
@@ -216,12 +223,6 @@ class Field(Question, PolymorphicMixin):
             self.error_text = "\n".join(e.messages)
             self.has_errors = True
             return self
-
-    def __unicode__(self):
-        if self.has_errors:
-            return "%s\n%s" (self.error_text, self.get_question())
-
-        return self.get_question()
 
 
 class StubScreen(Screen, PolymorphicMixin):
