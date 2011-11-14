@@ -173,8 +173,7 @@ class Question(Screen, PolymorphicMixin):
         Simply advance to the next screen. Subclasses will likely override
         this default behavior.
         """
-        return next
-
+        return self.next
 
     def __unicode__(self):
         if self.has_errors:
