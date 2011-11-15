@@ -313,12 +313,16 @@ class Session(models.Model):
                 # case of a leaf node without any successor screen
                 next = StubScreen()
             self.navigations.create(session=self, screen=next, text=str(next.downcast()))
+            if next.downcast().is_terminal():
+                self.complete()
             return next.downcast()
         except BackNavigation:
             return StubScreen(text=self.back(), terminal=False)
         except TransitionException as e:
             next = e.screen
             self.navigations.create(session=self, screen=next, text=str(next.downcast()))
+            if next.downcast().is_terminal():
+                self.complete()
             return next.downcast()
 
     def complete(self):
