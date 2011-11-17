@@ -177,7 +177,7 @@ class Question(Screen, PolymorphicMixin):
 
     def __unicode__(self):
         if self.has_errors:
-            return "%s\n%s" (self.error_text, self.get_question())
+            return "%s\n%s" % (self.error_text, self.get_question())
 
         return self.get_question()
 

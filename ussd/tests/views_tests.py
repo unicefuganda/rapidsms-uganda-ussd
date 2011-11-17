@@ -141,3 +141,7 @@ class ViewTest(TestCase):
         n = Navigation.objects.create(screen=StubScreen.objects.create(text='first', slug='notherstub'), session=s, text='ready to jump?')
         self.assertEquals(s.advance_progress('yes'), StubScreen.objects.get(slug='stubby'))
 
+    def testErrorInput(self):
+        self.assertSessionNavigation('foo', '', str(Menu.objects.get(slug='ussd_root')))
+        self.assertSessionNavigation('foo', '2', str(Field.objects.get(slug='test_t1')))
+        self.assertSessionNavigation('foo', 'pizza', str("+test_t1 parameter must be an even number.\n%s" % Field.objects.get(slug='test_t1')))
