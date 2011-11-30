@@ -100,11 +100,9 @@ class Menu(Screen, PolymorphicMixin):
         3. MEAT
         #. Back
         """
-        order = 1
         toret = []
-        for label in self.get_submenu_labels():
+        for label, order in self.get_submenu_labels():
             toret.append((order, label,))
-            order += 1
 
         if self.parent:
             toret.append(('#', 'Back'))
@@ -121,10 +119,10 @@ class Menu(Screen, PolymorphicMixin):
         for rendering to a display
         
         example return value:
-        ['meat','vegetables','fruits']
+        [('meat',1),('vegetables',2),('fruits', 4)]
         '''
         for c in self.get_children().order_by('order'):
-            yield c.get_label()
+            yield c.get_label(), c.order
 
     def is_terminal(self):
         return self.get_children().count() == 0
