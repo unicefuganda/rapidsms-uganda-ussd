@@ -204,7 +204,7 @@ class Field(Question, PolymorphicMixin):
             try:
                 submission = session.submissions.get(xform=self.field.xform)
             except XFormSubmission.DoesNotExist:
-                submission = XFormSubmission.objects.create(xform=self.field.xform, has_errors=True)
+                submission = XFormSubmission.objects.create(xform=self.field.xform, has_errors=True, connection=session.connection)
                 session.submissions.add(submission)
 
             try:
