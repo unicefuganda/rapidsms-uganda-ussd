@@ -61,7 +61,7 @@ class Screen(MPTTModel, PolymorphicMixin):
     slug = models.SlugField(primary_key=True)
 
     # The label to display when navigating to this submenu
-    label = models.CharField(max_length=50)
+    label = models.CharField(max_length=150)
 
     # The order this item should be displayed from it's parent menu, if 
     # the parent *is-a* menu
@@ -104,12 +104,16 @@ class Menu(Screen, PolymorphicMixin):
         for label, order in self.get_submenu_labels():
             toret.append((order, label,))
 
+
         if self.parent:
-            toret.append(('#', 'Back'))
+            toret.append((getattr(settings,"BACK_KEY","#"), 'Back'))
         toret = "\n".join("%s. %s" % (order, label) for order, label in toret)
 
         if self.has_errors:
             toret = "%s\n%s" % (self.error_label, toret)
+
+        if not toret:
+            return self.label
 
         return toret
 
@@ -132,7 +136,7 @@ class Menu(Screen, PolymorphicMixin):
             order = int(input)
             return self.get_children().get(order=order)
         except ValueError:
-            if input == '#':
+            if input == getattr(settings,"BACK_KEY","#"):
                 raise BackNavigation()
             # else fall through to error case
         except Screen.DoesNotExist:
