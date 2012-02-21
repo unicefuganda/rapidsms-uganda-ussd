@@ -112,9 +112,6 @@ class Menu(Screen, PolymorphicMixin):
         if self.has_errors:
             toret = "%s\n%s" % (self.error_label, toret)
 
-        if not toret:
-            return self.label
-
         return toret
 
     def get_submenu_labels(self):
