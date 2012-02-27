@@ -305,7 +305,8 @@ class Session(models.Model):
 
         try:
             ussd_pre_transition.send(sender=self, screen=screen, input=input, session=self)
-            next = screen.downcast().accept_input(input, self)
+            #handle equatel
+            next = screen.downcast().accept_input(input.rsplit("_")[0], self)
             if not next:
                 # this is actually an improperly configured USSD menu, but
                 # we're relaxing constraints and not blowing up in the
