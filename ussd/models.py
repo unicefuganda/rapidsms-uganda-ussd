@@ -293,6 +293,8 @@ class Session(models.Model):
         '''
         Navigate down the tree, based on the number the user has input.
         '''
+        if input.rsplit("_")[0] == getattr(settings,"BACK_KEY","#"):
+            return StubScreen(text=self.back(), terminal=False)
         screen = self.last_screen()
         if not screen:
             screen = self.get_initial_screen()
@@ -303,8 +305,10 @@ class Session(models.Model):
         nav.response = input
         nav.save()
 
+        #check for back navigation
+
         try:
-            ussd_pre_transition.send(sender=self, screen=screen, input=input, session=self)
+            ussd_pre_transition.send(sender=self, screen=screen, input=input.rsplit("_")[0], session=self)
             #handle equatel
             next = screen.downcast().accept_input(input.rsplit("_")[0], self)
             if not next:
