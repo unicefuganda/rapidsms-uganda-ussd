@@ -8,9 +8,9 @@ import urllib
 
 def ussd(req, input_form=YoForm, request_method='POST', output_template='ussd/yo.txt'):
     form = None
-    if request_method == 'GET' and req.GET:
+    if req.method == 'GET' and req.GET:
         form = input_form(req.GET)
-    elif request_method == 'POST' and req.POST:
+    elif req.method == 'POST' and req.POST:
         form = input_form(req.POST)
     if form and form.is_valid():
         session = form.cleaned_data['transactionId']
