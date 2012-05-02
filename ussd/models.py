@@ -61,7 +61,7 @@ class Screen(MPTTModel, PolymorphicMixin):
     slug = models.SlugField(primary_key=True)
 
     # The label to display when navigating to this submenu
-    label = models.CharField(max_length=150)
+    label = models.CharField(max_length=160)
 
     # The order this item should be displayed from it's parent menu, if 
     # the parent *is-a* menu
