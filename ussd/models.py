@@ -1,12 +1,11 @@
 from django.db import models
 from django.forms import ValidationError
 from mptt.models import MPTTModel
-from rapidsms.models import Contact, Connection
+from rapidsms.models import Connection
 from uganda_common.models import PolymorphicManager, PolymorphicMixin
 
-from rapidsms_xforms.models import XForm, XFormSubmission, XFormSubmissionValue, XFormField, xform_received
+from rapidsms_xforms.models import XFormSubmission, XFormSubmissionValue, XFormField
 import django
-import mptt
 from django.conf import settings
 
 # fired right before each screen gets a chance to process its input
